@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router';
+import { createHashRouter } from 'react-router';
 import { AppRoot } from './App';
 import DashboardPage from './pages/DashboardPage';
 import AllProjectsPage from './pages/AllProjectsPage';
@@ -8,7 +8,7 @@ import DevelopmentPage from './pages/DevelopmentPage';
 import SMEPage from './pages/SMEPage';
 import ExternalTeamsPage from './pages/ExternalTeamsPage';
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: '/',
     Component: AppRoot,
