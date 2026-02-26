@@ -1,12 +1,13 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Download } from 'lucide-react';
 import type { UnifiedCourseData } from '../utils/csvProcessor';
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState, useMemo, useEffect } from 'react';
 import { toPng } from 'html-to-image';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Input } from './ui/input';
+import { Checkbox } from './ui/checkbox';
+import { ScrollArea } from './ui/scroll-area';
 
 interface SimplifiedDashboardProps {
   courses: UnifiedCourseData[];
@@ -87,8 +88,8 @@ export function SimplifiedDashboard({ courses, lastUpdated }: SimplifiedDashboar
         </CardContent>
       </Card>
       
-      {/* Courses by ID Assigned - TABLE (Not Rendering) */}
-      <CoursesByIDTable data={coursesByIDData} />
+      {/* Courses by ID Assigned - CHART */}
+      <CoursesByIDChart data={coursesByIDData} />
       
       {/* Average Time by Development Category - CHART (Working) */}
       <Card>
@@ -134,67 +135,59 @@ export function SimplifiedDashboard({ courses, lastUpdated }: SimplifiedDashboar
   );
 }
 
-// Courses by ID Table Component (Replacing non-rendering chart)
-function CoursesByIDTable({ data }: { data: Array<{ id: string; count: number }> }) {
-  const [sortConfig, setSortConfig] = useState<{ key: 'id' | 'count'; direction: 'asc' | 'desc' }>({ 
-    key: 'count', 
-    direction: 'desc' 
-  });
+function CoursesByIDChart({ data }: { data: Array<{ id: string; completed: number; inProgress: number; total: number }> }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const tableRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const hasInitializedSelection = useRef(false);
 
-  const filteredAndSortedData = useMemo(() => {
-    let filtered = data;
-
-    if (searchTerm) {
-      filtered = data.filter(row => 
-        row.id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    const sorted = [...filtered];
-    sorted.sort((a, b) => {
-      if (sortConfig.key === 'id') {
-        return sortConfig.direction === 'asc' 
-          ? a.id.localeCompare(b.id)
-          : b.id.localeCompare(a.id);
-      } else {
-        return sortConfig.direction === 'asc' 
-          ? a.count - b.count
-          : b.count - a.count;
+  useEffect(() => {
+    const availableIds = data.map(row => row.id);
+    setSelectedIds(prev => {
+      if (!hasInitializedSelection.current) {
+        hasInitializedSelection.current = true;
+        return availableIds;
       }
+      return prev.filter(id => availableIds.includes(id));
     });
+  }, [data]);
 
-    return sorted;
-  }, [data, sortConfig, searchTerm]);
+  const filteredIdOptions = useMemo(() => {
+    if (!searchTerm.trim()) return data;
+    const term = searchTerm.toLowerCase();
+    return data.filter(row => row.id.toLowerCase().includes(term));
+  }, [data, searchTerm]);
 
-  const handleSort = (key: 'id' | 'count') => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
+  const selectedData = useMemo(() => {
+    return data.filter(row => selectedIds.includes(row.id));
+  }, [data, selectedIds]);
+
+  const toggleIdSelection = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id)
+        ? prev.filter(existingId => existingId !== id)
+        : [...prev, id]
+    );
   };
 
-  const downloadTable = async () => {
-    if (tableRef.current) {
+  const selectAllIds = () => setSelectedIds(data.map(row => row.id));
+  const clearAllIds = () => setSelectedIds([]);
+
+  const downloadChart = async () => {
+    if (chartRef.current) {
       try {
-        const dataUrl = await toPng(tableRef.current, { backgroundColor: '#ffffff' });
+        const dataUrl = await toPng(chartRef.current, { backgroundColor: '#ffffff' });
         const link = document.createElement('a');
-        link.download = 'courses-by-id.png';
+        link.download = 'courses-by-id-assigned.png';
         link.href = dataUrl;
         link.click();
       } catch (error) {
-        console.error('Failed to download table:', error);
+        console.error('Failed to download chart:', error);
       }
     }
   };
 
-  const SortIcon = ({ columnKey }: { columnKey: 'id' | 'count' }) => {
-    if (sortConfig.key !== columnKey) return <ArrowUpDown className="size-4 ml-2 opacity-30" />;
-    return sortConfig.direction === 'asc' ? 
-      <ArrowUp className="size-4 ml-2" /> : 
-      <ArrowDown className="size-4 ml-2" />;
-  };
+  const chartHeight = Math.max(350, selectedData.length * 40);
 
   if (data.length === 0) {
     return (
@@ -224,73 +217,89 @@ function CoursesByIDTable({ data }: { data: Array<{ id: string; count: number }>
           <div>
             <CardTitle>Courses by ID Assigned</CardTitle>
             <p className="text-sm text-gray-600 mt-1">
-              Distribution of courses across team members (Top 15)
+              Completed vs in-progress course counts by ID
             </p>
           </div>
           <Button 
             variant="outline" 
             size="sm"
-            onClick={downloadTable}
+            onClick={downloadChart}
           >
             <Download className="size-4 mr-2" />
             Download
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <Input
-          placeholder="Search by ID name..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
-        <div ref={tableRef} className="border rounded-lg overflow-hidden bg-white p-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => handleSort('id')}
-                    className="flex items-center px-0 hover:bg-transparent"
-                  >
-                    ID Assigned
-                    <SortIcon columnKey="id" />
-                  </Button>
-                </TableHead>
-                <TableHead className="text-right">
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => handleSort('count')}
-                    className="flex items-center ml-auto px-0 hover:bg-transparent"
-                  >
-                    Course Count
-                    <SortIcon columnKey="count" />
-                  </Button>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAndSortedData.length > 0 ? (
-                filteredAndSortedData.slice(0, 15).map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.id}</TableCell>
-                    <TableCell className="text-right text-lg font-semibold">{row.count}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={2} className="text-center text-gray-500 py-8">
-                    No results found for "{searchTerm}"
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+      <CardContent className="space-y-5">
+        <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+          <div className="border rounded-lg p-3 bg-gray-50 space-y-3">
+            <Input
+              placeholder="Search ID assigned..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={selectAllIds}>
+                Select all
+              </Button>
+              <Button variant="outline" size="sm" onClick={clearAllIds}>
+                Clear all
+              </Button>
+            </div>
+            <ScrollArea className="h-64 rounded border bg-white p-2">
+              <div className="space-y-1">
+                {filteredIdOptions.length > 0 ? (
+                  filteredIdOptions.map((row) => {
+                    const isChecked = selectedIds.includes(row.id);
+                    return (
+                      <button
+                        type="button"
+                        key={row.id}
+                        onClick={() => toggleIdSelection(row.id)}
+                        className="w-full flex items-center justify-between gap-2 rounded px-2 py-1.5 hover:bg-gray-100 text-left"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Checkbox checked={isChecked} />
+                          <span className="truncate text-sm">{row.id}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">{row.total}</span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-gray-500 px-2 py-4">No IDs match "{searchTerm}"</p>
+                )}
+              </div>
+            </ScrollArea>
+            <p className="text-xs text-gray-600">
+              Showing {selectedIds.length} of {data.length} IDs
+            </p>
+          </div>
+
+          <div ref={chartRef} className="border rounded-lg p-3 bg-white">
+            {selectedData.length === 0 ? (
+              <div className="h-[350px] flex items-center justify-center text-gray-500 text-sm">
+                Select at least one ID to display the chart.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={chartHeight}>
+                <BarChart
+                  data={selectedData}
+                  layout="vertical"
+                  margin={{ top: 10, right: 20, left: 20, bottom: 10 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis dataKey="id" type="category" width={150} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="completed" stackId="courses" fill="#3b82f6" name="Completed" />
+                  <Bar dataKey="inProgress" stackId="courses" fill="#10b981" name="In Progress" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
-        <p className="text-sm text-gray-500">
-          Showing {Math.min(filteredAndSortedData.length, 15)} of {data.length} IDs
-        </p>
       </CardContent>
     </Card>
   );
@@ -304,9 +313,7 @@ function prepareCoursesByYearData(courses: UnifiedCourseData[]) {
     const year = course.year;
     const existing = yearMap.get(year) || { completed: 0, inProgress: 0 };
     
-    const status = course.metadata['Status'] || course.status || '';
-    const isCompleted = status.toLowerCase().includes('completed') || 
-                       status.toLowerCase().includes('published');
+    const isCompleted = isCourseCompleted(course);
     
     if (isCompleted) {
       existing.completed++;
@@ -323,26 +330,51 @@ function prepareCoursesByYearData(courses: UnifiedCourseData[]) {
 }
 
 function prepareCoursesByIDData(courses: UnifiedCourseData[]) {
-  const idMap = new Map<string, number>();
+  const idMap = new Map<string, { completed: number; inProgress: number }>();
   
   courses.forEach(course => {
-    const idKey = Object.keys(course.metadata).find(k => {
-      const lower = k.toLowerCase();
-      return lower.includes('id') && lower.includes('assigned');
-    });
-    
-    const idAssigned = idKey ? course.metadata[idKey] : null;
-    
-    if (idAssigned && String(idAssigned).trim() !== '') {
-      const cleanId = String(idAssigned).trim();
-      idMap.set(cleanId, (idMap.get(cleanId) || 0) + 1);
+    const idAssigned = getAssignedId(course);
+
+    if (idAssigned) {
+      const existing = idMap.get(idAssigned) || { completed: 0, inProgress: 0 };
+      if (isCourseCompleted(course)) {
+        existing.completed += 1;
+      } else {
+        existing.inProgress += 1;
+      }
+      idMap.set(idAssigned, existing);
     }
   });
   
   return Array.from(idMap.entries())
-    .map(([id, count]) => ({ id, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 15);
+    .map(([id, counts]) => ({
+      id,
+      completed: counts.completed,
+      inProgress: counts.inProgress,
+      total: counts.completed + counts.inProgress
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function getAssignedId(course: UnifiedCourseData): string | null {
+  const idKey = Object.keys(course.metadata).find(key => {
+    const lower = key.toLowerCase();
+    return lower.includes('id') && lower.includes('assigned');
+  });
+
+  if (!idKey) return null;
+  const value = course.metadata[idKey];
+  if (!value || String(value).trim() === '') return null;
+  return String(value).trim();
+}
+
+function isCourseCompleted(course: UnifiedCourseData): boolean {
+  const metadataStatusKey = Object.keys(course.metadata).find(
+    key => key.toLowerCase() === 'status'
+  );
+  const status = metadataStatusKey ? course.metadata[metadataStatusKey] : course.status;
+  const normalizedStatus = String(status || '').toLowerCase();
+  return normalizedStatus.includes('completed') || normalizedStatus.includes('published');
 }
 
 function prepareAvgTimeByDevelopmentCategory(courses: UnifiedCourseData[]) {
