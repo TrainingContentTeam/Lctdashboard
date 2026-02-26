@@ -12,6 +12,7 @@
   ## Documentation
 
   - [Project File Explanation](./EXPLANATION.md)
+  - [How to Utilize This Tool (Internal Resource)](https://lexipolllc.sharepoint.com/:u:/r/sites/02.TEAM.ContentL/SitePages/Data-is-KEY.aspx?csf=1&web=1&e=DtSISb)
 
   ## GitHub Pages Deployment
 
