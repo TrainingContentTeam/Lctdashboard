@@ -24,4 +24,21 @@
 
   Workflow file:
   - [deploy-gh-pages.yml](./.github/workflows/deploy-gh-pages.yml)
+
+  ## 404 Troubleshooting (GitHub Pages)
+
+  If you still get a `404`, verify these settings in GitHub:
+
+  1. `Actions` tab: latest `Deploy to GitHub Pages` run is green.
+  2. `Settings > Actions > General > Workflow permissions`: set to **Read and write permissions**.
+  3. `Settings > Pages`:
+     - Source: **Deploy from a branch**
+     - Branch: **gh-pages**
+     - Folder: **/ (root)**
+  4. `gh-pages` branch contains built files (`index.html`, `assets/*`, `404.html`, `.nojekyll`).
+
+  Note:
+  - For repositories named `<owner>.github.io`, Pages base path must be `/`.
+  - For project repositories, base path is `/<repo-name>/`.
+  - The workflow auto-detects this now.
   
